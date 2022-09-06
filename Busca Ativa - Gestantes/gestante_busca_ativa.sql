@@ -265,12 +265,16 @@ SELECT v3.estabelecimento_cnes,
                       - Data de registro em tb_dim_tempo é maior que últimos 294 dias (280 dias de gestação + 14 dias de margem)
                     */
                     CURRENT_DATE - max(v1.atendimento_data) OVER (PARTITION BY v1.gestante_nome, v1.gestante_data_de_nascimento) AS gestante_consulta_prenatal_ultima_dias_desde,
-                    first_value(v1.gestante_dpp) OVER (PARTITION BY v1.gestante_nome, v1.gestante_data_de_nascimento ORDER BY v1.atendimento_data ASC) AS gestante_primeira_dpp,
-                    first_value(v1.gestante_idade_gestacional) OVER (PARTITION BY v1.gestante_nome, v1.gestante_data_de_nascimento ORDER BY v1.atendimento_data ASC) AS gestante_idade_gestacional,
-                    first_value(v1.gestante_idade_gestacional_atendimento) OVER (PARTITION BY v1.gestante_nome, v1.gestante_data_de_nascimento ORDER BY v1.atendimento_data ASC) AS gestante_idade_gestacional_primeiro_atendimento,
-                    /* Pega a primeira DUM (ordenada pela data de atendimento) a partir do campo co_dim_tempo_dum da ficha de atendimento individual (tb_fat_atendimento_individual), repartido a partir de nome da gestante e data de nascimento */
-                    first_value(v1.gestante_dum) OVER (PARTITION BY v1.gestante_nome, v1.gestante_data_de_nascimento ORDER BY v1.atendimento_data ASC) AS gestante_dum_primeiro_atendimento,
-                    min(v1.atendimento_data) OVER (PARTITION BY v1.gestante_nome, v1.gestante_data_de_nascimento) AS atendimento_primeiro_data
+                    /* Pega a primeira DPP não nula (ordenada pela data de atendimento) a partir do campo co_dim_tempo_dum da ficha de atendimento individual (tb_fat_atendimento_individual), repartido a partir de nome da gestante e data de nascimento */
+                    (array_agg(v1.gestante_dpp) FILTER (WHERE v1.gestante_dpp IS NOT NULL) OVER (PARTITION BY v1.gestante_nome, v1.gestante_data_de_nascimento ORDER BY v1.atendimento_data ASC))[1] AS gestante_primeira_dpp,
+                    /* Pega a primeira IG não nula (ordenada pela data de atendimento) a partir do campo co_dim_tempo_dum da ficha de atendimento individual (tb_fat_atendimento_individual), repartido a partir de nome da gestante e data de nascimento */
+                    (array_agg(v1.gestante_idade_gestacional) FILTER (WHERE v1.gestante_idade_gestacional IS NOT NULL) OVER (PARTITION BY v1.gestante_nome, v1.gestante_data_de_nascimento ORDER BY v1.atendimento_data ASC))[1] AS gestante_idade_gestacional,
+                    /* Pega a idade gestacional do primeiro atendimento onde a mesma não está nula (ordenada pela data de atendimento) a partir do campo co_dim_tempo_dum da ficha de atendimento individual (tb_fat_atendimento_individual), repartido a partir de nome da gestante e data de nascimento */
+                    (array_agg(v1.gestante_idade_gestacional_atendimento) FILTER (WHERE v1.gestante_idade_gestacional_atendimento IS NOT NULL) OVER (PARTITION BY v1.gestante_nome, v1.gestante_data_de_nascimento ORDER BY v1.atendimento_data ASC))[1] AS gestante_idade_gestacional_primeiro_atendimento,
+                     /* Pega a primeira DUM não nula (ordenada pela data de atendimento) a partir do campo co_dim_tempo_dum da ficha de atendimento individual (tb_fat_atendimento_individual), repartido a partir de nome da gestante e data de nascimento */
+                    (array_agg(v1.gestante_dum) FILTER (WHERE v1.gestante_dum <> '3000-12-31') OVER (PARTITION BY v1.gestante_nome, v1.gestante_data_de_nascimento ORDER BY v1.atendimento_data ASC))[1] AS gestante_dum_primeiro_atendimento,
+                    /* Pega a primeira data de atendimento não nula (ordenada pela data de atendimento) a partir do campo co_dim_tempo_dum da ficha de atendimento individual (tb_fat_atendimento_individual), repartido a partir de nome da gestante e data de nascimento */
+                    min(v1.atendimento_data) FILTER (WHERE v1.gestante_dpp IS NOT NULL) OVER (PARTITION BY v1.gestante_nome, v1.gestante_data_de_nascimento) AS atendimento_primeiro_data
                     FROM ( 
                             SELECT tdt.dt_registro AS atendimento_data,
                             /* Retorna código da unidade na Ficha de cadastro individual recente (tb_fat_cad_individual), caso nulo retorna código da unidade na Ficha de atendimento individual recente (tb_fat_atendimento_individual) */
