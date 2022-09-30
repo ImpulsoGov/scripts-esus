@@ -319,7 +319,7 @@ SELECT v3.estabelecimento_cnes,
                               Calcula a Idade Gestacional por:
                               - Caso a DUM da Ficha de Atendimento Individual (tb_fat_atendimento_individual) preenchida corretamente (diferente de 3000), retorna (data atual - data de registro)/7
                               - Caso idade gestacional (nu_idade_gestacional_semanas) da Ficha de Atendimento Individual (tb_fat_atendimento_individual) preenchida, retorna ((data atual - (data de registro - 7 dias * Idade gestacional em semanas )) / 7)
-                              - Caso ambos esteja vazio, retorna nulo
+                              - Caso ambos esteja vazios, retorna nulo
                             */
                             CASE
                                 WHEN tdtdum.nu_ano <> 3000 THEN (CURRENT_DATE - tdtdum.dt_registro) / 7
@@ -327,7 +327,17 @@ SELECT v3.estabelecimento_cnes,
                                 ELSE NULL
                             END AS gestante_idade_gestacional,
                             tfai.nu_idade_gestacional_semanas as gestante_idade_gestacional_atendimento,
-                            tdtdum.dt_registro AS gestante_dum
+                             /* 
+                              Calcula a DUM por:
+                              - Caso a DUM da Ficha de Atendimento Individual (tb_fat_atendimento_individual) preenchida corretamente (diferente de 3000), retorna a DUM preenchida
+                              - Caso a DUM não esteja preenchida, utiliza a data de atendimento substraindo-se a idade gestacional da mesma, chegando a uma DUM estimada
+                              - Caso ambos esteja vazios, retorna nulo
+                            */
+                            CASE
+                                WHEN tdtdum.nu_ano <> 3000 THEN tdtdum.dt_registro
+                                WHEN tfai.nu_idade_gestacional_semanas IS NOT NULL THEN (tdt.dt_registro - '7 days'::interval * tfai.nu_idade_gestacional_semanas::double precision)::date
+                                ELSE NULL
+                            END AS gestante_dum
                            /* Inicio do FROM */
                            FROM tb_fat_atendimento_individual tfai
                              JOIN tb_dim_cbo tdcbo ON tdcbo.co_seq_dim_cbo = tfai.co_dim_cbo_1
