@@ -276,7 +276,10 @@ SELECT v3.estabelecimento_cnes,
                     /* Pega a primeira data de atendimento não nula (ordenada pela data de atendimento) a partir do campo co_dim_tempo_dum da ficha de atendimento individual (tb_fat_atendimento_individual), repartido a partir de nome da gestante e data de nascimento */
                     min(v1.atendimento_data) FILTER (WHERE v1.gestante_dpp IS NOT NULL) OVER (PARTITION BY v1.gestante_nome, v1.gestante_data_de_nascimento) AS atendimento_primeiro_data
                     FROM ( 
-                            SELECT tdt.dt_registro AS atendimento_data,
+                            SELECT
+                            /* Faz distinct pela PK da tabela, para evitar registros duplicados caso o atendimento possua mais de 1 ou CID e/ou CIAP registrados */ 
+                            distinct(tfai.co_seq_fat_atd_ind),
+                            tdt.dt_registro AS atendimento_data,
                             /* Retorna código da unidade na Ficha de cadastro individual recente (tb_fat_cad_individual), caso nulo retorna código da unidade na Ficha de atendimento individual recente (tb_fat_atendimento_individual) */
                             COALESCE(NULLIF(unidadecadastrorecente.nu_cnes, '-'), unidadeatendimentorecente.nu_cnes) AS estabelecimento_cnes,
                             /* Retorna nome da unidade na Ficha de cadastro individual recente (tb_fat_cad_individual), caso nulo retorna nome da unidade na Ficha de atendimento individual recente (tb_fat_atendimento_individual) */
