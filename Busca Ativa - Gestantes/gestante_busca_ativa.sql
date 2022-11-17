@@ -44,7 +44,8 @@ SELECT v3.estabelecimento_cnes,
         CASE
             WHEN v3.possui_registro_parto IS TRUE THEN 'Sim'
             ELSE 'Não'
-        END AS possui_registro_parto
+        END AS possui_registro_parto,
+   CURRENT_TIMESTAMP as atualizacao_data 
    FROM ( SELECT row_number() OVER (PARTITION BY v2.gestante_nome, v2.gestante_data_de_nascimento ORDER BY v2.atendimento_data DESC) AS r,
             v2.atendimento_data,
             v2.atendimento_primeiro_data,
@@ -100,41 +101,25 @@ SELECT v3.estabelecimento_cnes,
               - Data de registro maior ou igual data da DUM 
               - Data de registro menor ou igual data do DPP
             */
-            ( 
-                SELECT count(*) > 0
-                   FROM ( 
-                            SELECT tdp.co_proced
-                            FROM tb_fat_proced_atend_proced tfpap
-                            JOIN tb_dim_procedimento tdp ON tdp.co_seq_dim_procedimento = tfpap.co_dim_procedimento
-                            JOIN tb_dim_cbo tdcbo ON tdcbo.co_seq_dim_cbo = tfpap.co_dim_cbo
-                            JOIN tb_dim_tempo tdtempo ON tdtempo.co_seq_dim_tempo = tfpap.co_dim_tempo
-                            WHERE (tfpap.co_fat_cidadao_pec IN (
-                                                                    SELECT tfcprocedhiv.co_seq_fat_cidadao_pec
-                                                                    FROM tb_fat_cidadao_pec tfcprocedhiv
-                                                                    WHERE tfcprocedhiv.no_cidadao = v2.gestante_nome AND tfcprocedhiv.co_dim_tempo_nascimento = v2.gestante_data_nascimento_ts
-                                                                )
-                                 ) 
-                                AND (tdcbo.nu_cbo ~~ ANY (ARRAY['2251%', '2252%', '2253%', '2231%', '2235%', '3222%'])) 
-                                    AND tdtempo.dt_registro >=v2.gestante_dum_primeiro_atendimento
-                                        AND tdtempo.dt_registro <= v2.gestante_primeira_dpp
-                                            AND (tdp.co_proced = ANY (ARRAY['0202030300', 'ABEX018', '0214010058', '0214010040', 'ABPG024']))
-                            UNION ALL
-                            SELECT tdp.co_proced
-                            FROM tb_fat_atd_ind_procedimentos tfaip
-                            JOIN tb_dim_procedimento tdp ON tdp.co_seq_dim_procedimento = tfaip.co_dim_procedimento_avaliado
-                            JOIN tb_dim_cbo tdcbo ON tdcbo.co_seq_dim_cbo = tfaip.co_dim_cbo_1
-                            JOIN tb_dim_tempo tdtempo ON tdtempo.co_seq_dim_tempo = tfaip.co_dim_tempo
-                            WHERE (tfaip.co_fat_cidadao_pec IN (
-                                                                    SELECT tfcprocedhiv.co_seq_fat_cidadao_pec
-                                                                    FROM tb_fat_cidadao_pec tfcprocedhiv
-                                                                    WHERE tfcprocedhiv.no_cidadao = v2.gestante_nome AND tfcprocedhiv.co_dim_tempo_nascimento = v2.gestante_data_nascimento_ts
-                                                                )
-                                  ) 
-                                AND (tdcbo.nu_cbo ~~ ANY (ARRAY['2251%', '2252%', '2253%', '2231%', '2235%', '3222%'])) 
-                                    AND tdtempo.dt_registro >= v2.gestante_dum_primeiro_atendimento AND tdtempo.dt_registro <= v2.gestante_primeira_dpp
-                                        AND (tdp.co_proced = ANY (ARRAY['0202030300', 'ABEX018', '0214010058', '0214010040', 'ABPG024']))
-                        ) e1
-            ) AS exame_hiv_realizado,
+            ( SELECT count(*) > 0
+                   FROM ( SELECT tdp.co_proced
+                           FROM tb_fat_proced_atend_proced tfpap
+                             JOIN tb_dim_procedimento tdp ON tdp.co_seq_dim_procedimento = tfpap.co_dim_procedimento
+                             JOIN tb_dim_cbo tdcbo ON tdcbo.co_seq_dim_cbo = tfpap.co_dim_cbo
+                             JOIN tb_dim_tempo tdtempo ON tdtempo.co_seq_dim_tempo = tfpap.co_dim_tempo
+                          WHERE (tfpap.co_fat_cidadao_pec IN ( SELECT tfcprocedhiv.co_seq_fat_cidadao_pec
+                                   FROM tb_fat_cidadao_pec tfcprocedhiv
+                                  WHERE tfcprocedhiv.no_cidadao::text = v2.gestante_nome::text AND tfcprocedhiv.co_dim_tempo_nascimento = v2.gestante_data_nascimento_ts)) AND (tdcbo.nu_cbo::text ~~ ANY (ARRAY['2251%'::text, '2252%'::text, '2253%'::text, '2231%'::text, '2235%'::text, '3222%'::text])) AND tdtempo.dt_registro >= v2.gestante_dum_primeiro_atendimento AND tdtempo.dt_registro <= v2.gestante_primeira_dpp AND (tdp.co_proced::text = ANY (ARRAY['0214010058'::text, '0214010040'::text, 'ABPG024'::text]))
+                        UNION ALL
+                         SELECT tdp.co_proced
+                           FROM tb_fat_atd_ind_procedimentos tfaip
+                             JOIN tb_dim_procedimento tdp ON tdp.co_seq_dim_procedimento = tfaip.co_dim_procedimento_avaliado
+                             JOIN tb_dim_cbo tdcbo ON tdcbo.co_seq_dim_cbo = tfaip.co_dim_cbo_1
+                             JOIN tb_dim_tempo tdtempo ON tdtempo.co_seq_dim_tempo = tfaip.co_dim_tempo
+                          WHERE (tfaip.co_fat_cidadao_pec IN ( SELECT tfcprocedhiv.co_seq_fat_cidadao_pec
+                                   FROM tb_fat_cidadao_pec tfcprocedhiv
+                                  WHERE tfcprocedhiv.no_cidadao::text = v2.gestante_nome::text AND tfcprocedhiv.co_dim_tempo_nascimento = v2.gestante_data_nascimento_ts)) AND (tdcbo.nu_cbo::text ~~ ANY (ARRAY['2251%'::text, '2252%'::text, '2253%'::text, '2231%'::text, '2235%'::text, '3222%'::text])) AND tdtempo.dt_registro >= v2.gestante_dum_primeiro_atendimento AND tdtempo.dt_registro <= v2.gestante_primeira_dpp AND (tdp.co_proced::text = ANY (ARRAY['0202030300'::text, 'ABEX018'::text]))) e1
+              ) AS exame_hiv_realizado,
             /*  
               Avalia se exame de Sifilis a partir das seguintes condições:
               União de Grupo 1 - Busca Ficha de Procedimento Individual (tb_fat_proced_atend_proced):
@@ -150,34 +135,26 @@ SELECT v3.estabelecimento_cnes,
               - Data de registro maior ou igual data da DUM 
               - Data de registro menor ou igual data do DPP
               */
-            ( 
-                SELECT count(*) > 0
-                FROM ( 
-                        SELECT tdp.co_proced
-                        FROM tb_fat_proced_atend_proced tfpap
-                        JOIN tb_dim_procedimento tdp ON tdp.co_seq_dim_procedimento = tfpap.co_dim_procedimento
-                        JOIN tb_dim_cbo tdcbo ON tdcbo.co_seq_dim_cbo = tfpap.co_dim_cbo
-                        JOIN tb_dim_tempo tdtempo ON tdtempo.co_seq_dim_tempo = tfpap.co_dim_tempo
-                        WHERE (tfpap.co_fat_cidadao_pec IN ( 
-                                                                SELECT tfcprocedsilfilis.co_seq_fat_cidadao_pec
-                                                                FROM tb_fat_cidadao_pec tfcprocedsilfilis
-                                                                WHERE tfcprocedsilfilis.no_cidadao = v2.gestante_nome AND tfcprocedsilfilis.co_dim_tempo_nascimento = v2.gestante_data_nascimento_ts
-                                                            )   
-                             ) AND (tdcbo.nu_cbo ~~ ANY (ARRAY['2251%', '2252%', '2253%', '2231%', '2235%', '3222%'])) AND tdtempo.dt_registro >= v2.gestante_dum_primeiro_atendimento AND tdtempo.dt_registro <= v2.gestante_primeira_dpp AND (tdp.co_proced = ANY (ARRAY['0202031110', '0202031179', 'ABEX019', '0214010074', '0214010082', '0202030300', '0214010040', '0214010058', 'ABPG026']))
+            ( SELECT count(*) > 0
+                   FROM ( SELECT tdp.co_proced
+                           FROM tb_fat_proced_atend_proced tfpap
+                             JOIN tb_dim_procedimento tdp ON tdp.co_seq_dim_procedimento = tfpap.co_dim_procedimento
+                             JOIN tb_dim_cbo tdcbo ON tdcbo.co_seq_dim_cbo = tfpap.co_dim_cbo
+                             JOIN tb_dim_tempo tdtempo ON tdtempo.co_seq_dim_tempo = tfpap.co_dim_tempo
+                          WHERE (tfpap.co_fat_cidadao_pec IN ( SELECT tfcprocedsilfilis.co_seq_fat_cidadao_pec
+                                   FROM tb_fat_cidadao_pec tfcprocedsilfilis
+                                  WHERE tfcprocedsilfilis.no_cidadao::text = v2.gestante_nome::text AND tfcprocedsilfilis.co_dim_tempo_nascimento = v2.gestante_data_nascimento_ts)) AND (tdcbo.nu_cbo::text ~~ ANY (ARRAY['2251%'::text, '2252%'::text, '2253%'::text, '2231%'::text, '2235%'::text, '3222%'::text])) AND tdtempo.dt_registro >= v2.gestante_dum_primeiro_atendimento AND tdtempo.dt_registro <= v2.gestante_primeira_dpp AND (tdp.co_proced::text = ANY (ARRAY['0214010074'::text, '0214010082'::text, 'ABPG026'::text]))
                         UNION ALL
-                        SELECT tdp.co_proced
-                        FROM tb_fat_atd_ind_procedimentos tfaip
-                        JOIN tb_dim_procedimento tdp ON tdp.co_seq_dim_procedimento = tfaip.co_dim_procedimento_avaliado
-                        JOIN tb_dim_cbo tdcbo ON tdcbo.co_seq_dim_cbo = tfaip.co_dim_cbo_1
-                        JOIN tb_dim_tempo tdtempo ON tdtempo.co_seq_dim_tempo = tfaip.co_dim_tempo
-                        WHERE (tfaip.co_fat_cidadao_pec IN ( 
-                                                                SELECT tfcprocedsilfilis.co_seq_fat_cidadao_pec
-                                                                FROM tb_fat_cidadao_pec tfcprocedsilfilis
-                                                                WHERE tfcprocedsilfilis.no_cidadao = v2.gestante_nome AND tfcprocedsilfilis.co_dim_tempo_nascimento = v2.gestante_data_nascimento_ts
-                                                            )
-                            ) AND (tdcbo.nu_cbo ~~ ANY (ARRAY['2251%', '2252%', '2253%', '2231%', '2235%', '3222%'])) AND tdtempo.dt_registro >= v2.gestante_dum_primeiro_atendimento AND tdtempo.dt_registro <= v2.gestante_primeira_dpp AND (tdp.co_proced = ANY (ARRAY['0202031110', '0202031179', 'ABEX019', '0214010074', '0214010082', '0202030300', '0214010040', '0214010058', 'ABPG026']))
-                        ) e2
+                         SELECT tdp.co_proced
+                           FROM tb_fat_atd_ind_procedimentos tfaip
+                             JOIN tb_dim_procedimento tdp ON tdp.co_seq_dim_procedimento = tfaip.co_dim_procedimento_avaliado
+                             JOIN tb_dim_cbo tdcbo ON tdcbo.co_seq_dim_cbo = tfaip.co_dim_cbo_1
+                             JOIN tb_dim_tempo tdtempo ON tdtempo.co_seq_dim_tempo = tfaip.co_dim_tempo
+                          WHERE (tfaip.co_fat_cidadao_pec IN ( SELECT tfcprocedsilfilis.co_seq_fat_cidadao_pec
+                                   FROM tb_fat_cidadao_pec tfcprocedsilfilis
+                                  WHERE tfcprocedsilfilis.no_cidadao::text = v2.gestante_nome::text AND tfcprocedsilfilis.co_dim_tempo_nascimento = v2.gestante_data_nascimento_ts)) AND (tdcbo.nu_cbo::text ~~ ANY (ARRAY['2251%'::text, '2252%'::text, '2253%'::text, '2231%'::text, '2235%'::text, '3222%'::text])) AND tdtempo.dt_registro >= v2.gestante_dum_primeiro_atendimento AND tdtempo.dt_registro <= v2.gestante_primeira_dpp AND (tdp.co_proced::text = ANY (ARRAY['0202031110'::text, '0202031179'::text, 'ABEX019'::text]))) e2
             ) AS exame_sifilis_realizado,
+     
             /* 
               Avalia se houve aborto da gestação a partir das seguintes condições:
               - Nome da gestante na ficha tb_fat_cidadao_pec igual tb_fat_cidadao_pec (tfcp.no_cidadao unida pela ficha de atendimento individual) E Data de nascimento na ficha tb_fat_cidadao_pec igual a tb_dim_tempo (tempocidadaopec.dt_registro unida pela ficha cidadao pec pelo tempo de nascimento)
@@ -406,4 +383,4 @@ SELECT v3.estabelecimento_cnes,
       - Primeira linha para cada gestante (registro mais recente)
       - Cuja data provável de parto maior ou igual que a data atual
     */
-  WHERE v3.r = 1 AND v3.gestante_primeira_dpp >= CURRENT_DATE;
+  WHERE v3.r = 1;
