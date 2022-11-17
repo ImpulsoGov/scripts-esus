@@ -45,7 +45,7 @@ SELECT v3.estabelecimento_cnes,
             WHEN v3.possui_registro_parto IS TRUE THEN 'Sim'
             ELSE 'Não'
         END AS possui_registro_parto,
-   CURRENT_TIMESTAMP as atualizacao_data 
+   CURRENT_TIMESTAMP as criacao_data 
    FROM ( SELECT row_number() OVER (PARTITION BY v2.gestante_nome, v2.gestante_data_de_nascimento ORDER BY v2.atendimento_data DESC) AS r,
             v2.atendimento_data,
             v2.atendimento_primeiro_data,
